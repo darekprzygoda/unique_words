@@ -56,8 +56,8 @@ jobs:
       shell: bash
       run: |
         echo "build-output-dir=${{ github.workspace }}/build" >> "$GITHUB_OUTPUT"
-    - name: Setup GCC Toolchain for CMake
-      run: export CXX=g++-13
+    #- name: Setup GCC Toolchain for CMake
+    #  run: export CXX=g++-13
     - name: Install CMake
       run: sudo apt update && sudo apt install cmake
     - name: Install Catch2 v3 from Source
