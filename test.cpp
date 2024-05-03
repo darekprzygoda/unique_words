@@ -1,4 +1,5 @@
 #include "catch2/matchers/catch_matchers_string.hpp"
+#include "trie.hpp"
 #include "util.hpp"
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_all.hpp>
@@ -166,4 +167,69 @@ kurcze co za dzien uroczy.)" );
     CHECK( res[ 1 ] == "w gore slonce zatralala,\n" );
     CHECK( res[ 2 ] == "zaba tylek z stawie moczy,\n" );
     CHECK( res[ 3 ] == "kurcze co za dzien uroczy." );
+}
+
+TEST_CASE( "trie-ctor", "[trie]" ) {
+    util::Trie t;
+    CHECK( t.is_empty() );
+    CHECK( t.size() == 0 );
+
+    t.clear();
+    CHECK( t.is_empty() );
+    CHECK( t.size() == 0 );
+
+    CHECK( !t.contains( "" ) );
+    CHECK( !t.contains( "ala" ) );
+}
+
+TEST_CASE( "trie-dtor", "[trie]" ) {
+    {
+        util::Trie t;
+        CHECK( t.insert( "ala" ) );
+        CHECK( t.insert( "ma" ) );
+        CHECK( t.insert( "ale" ) );
+    }
+}
+
+TEST_CASE( "trie-insert", "[trie]" ) {
+    util::Trie t;
+    CHECK( t.insert( "a" ) );
+    CHECK( t.size() == 1 );
+    CHECK( t.insert( "a" ) == false );
+
+    CHECK( t.contains( "a" ) );
+    CHECK( !t.contains( "b" ) );
+
+    CHECK( t.insert( "b" ) );
+    CHECK( t.size() == 2 );
+    CHECK( t.insert( "b" ) == false );
+
+    CHECK( t.insert( "as" ) );
+    CHECK( t.size() == 3 );
+    CHECK( t.insert( "as" ) == false );
+
+    CHECK( t.insert( "astra" ) );
+    CHECK( t.size() == 4 );
+}
+
+
+TEST_CASE( "trie-merge", "[trie]" ) {
+    util::Trie t1;
+    util::Trie t2;
+    CHECK( t1.insert( "a" ) );
+    CHECK( t1.insert( "as" ) );
+    CHECK( t1.insert( "astra" ) );
+    CHECK( t1.size() == 3 );
+
+    CHECK( t2.insert( "asparagus" ) );
+    CHECK( t2.insert( "bura" ) );
+    CHECK( t2.insert( "cela" ) );
+    CHECK( t2.insert( "as" ) );
+    CHECK( t2.insert( "celofan" ) );
+
+    CHECK( t2.size() == 5 );
+
+    t1.merge( t2 );
+    CHECK( t1.size() == 7 );
+    CHECK( t2.size() == 1 );
 }

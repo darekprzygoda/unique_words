@@ -1,3 +1,6 @@
+#ifndef UTIL_HPP
+#define UTIL_HPP
+
 #include <cassert>
 #include <cstring>
 #include <filesystem>
@@ -113,3 +116,5 @@ namespace util {
     };
 
 } // namespace util
+
+#endif

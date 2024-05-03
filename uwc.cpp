@@ -1,3 +1,4 @@
+#include "trie.hpp"
 #include "util.hpp"
 #include <condition_variable>
 #include <cstdio>
@@ -5,7 +6,6 @@
 #include <filesystem>
 #include <iostream>
 #include <optional>
-#include <set>
 #include <string>
 #include <thread>
 #include <unordered_set>
@@ -42,21 +42,15 @@ namespace {
 
 namespace uwc {
 
-    // to enable heterogenous lookup by string_view or const char*
-    struct string_hash {
-        using is_transparent = void;
-        [[nodiscard]] size_t operator()( const char* txt ) const { return std::hash< std::string_view >{}( txt ); }
-        [[nodiscard]] size_t operator()( std::string_view txt ) const { return std::hash< std::string_view >{}( txt ); }
-        [[nodiscard]] size_t operator()( const std::string& txt ) const { return std::hash< std::string >{}( txt ); }
-    };
-
-    using Words = std::unordered_set< std::string, string_hash, std::equal_to<> >;
     const auto npos = std::string_view::npos;
+
+    using Words = util::Trie;
 
     class Worker {
       public:
         explicit Worker( int id, Words const& final, std::atomic< unsigned >& done )
             : id_( id ), done_( done ), finalWords_( final ), thread_( &Worker::process, this ) {}
+
         ~Worker() {
             std::unique_lock lock( m_ );
             state_ = Exit;
@@ -292,8 +286,9 @@ namespace uwc {
             } else
                 std::cout << "!!! Done in " << sec.count() << " seconds.\n";
             std::cout << "File " << in_.string() << " contains " << words.size() << " unique words, total " << total << "\n";
-            /// for ( auto const& w : words )
-            ///     std::cout << "'" << w << "'\n";
+            // for ( auto const& w : words )
+            //      std::cout << "'" << w << "'\n";
+            words.clear();
             return 0;
         }
 

@@ -1,0 +1,8 @@
+File "test/r20-1G.txt" contains 65425056 words (51689602 unique)
+File "test/r3-1G.txt" contains 65202016 words (62593249 unique)
+File "test/r90-10M.txt" contains 686136 words (61783 unique)
+File "test/r90-10M.txt" contains 686136 words (61783 unique)
+
+
+
+
