@@ -5,13 +5,12 @@
 #include <filesystem>
 #include <iostream>
 #include <optional>
-#include <set>
 #include <string>
 #include <thread>
 #include <unordered_set>
 
 namespace {
-#define Logging 1
+// #define Logging 1
 #ifdef Logging
     std::mutex logMutex_;
     [[maybe_unused]]
@@ -33,9 +32,9 @@ namespace {
         ( std::cout << ... << args ) << std::endl;
     }
 #else
-    void log( char const* ) {}
+    [[maybe_unused]] void log( char const* ) {}
     template< typename... ARGS >
-    void log( ARGS const&... args ) {}
+    void log( ARGS const&... ) {}
 
 #endif
 } // namespace
@@ -73,11 +72,9 @@ namespace uwc {
                 state_ = Done;
                 done_.fetch_add( 1, std::memory_order_release );
             } else {
-                // log( id_, ": Worker go" );
                 state_ = Go;
                 cv_.notify_one();
             }
-            /// log( id_, ": Worker run end: ", state_ );
         }
 
         Words const& getWords() const {
@@ -152,7 +149,7 @@ namespace uwc {
             }
         }
 
-        int id_;
+        int id_; // used in logging only
         std::atomic< unsigned >& done_;
         Words const& finalWords_;
 
@@ -175,6 +172,7 @@ namespace uwc {
         const std::size_t maxInBufSize_ = util::kGB;
         std::size_t inBufSize_ = defaultInBufSize_;
         bool simple_ = false;
+        bool verbose_ = true;
 
         enum AggregateMode { SingleThread, MultiThread, DelayedSingle, DelayedMulti };
         AggregateMode agg_ = SingleThread;
@@ -182,7 +180,7 @@ namespace uwc {
       public:
         App() {}
 
-        void usage() { std::cout << "Usage: uwc [-inbuf <read_buffer_size] <input_path>\n"; }
+        void usage() { std::cout << "Usage: uwc [-quiet] [-inbuf <read_buffer_size] <input_path>\n"; }
 
         bool processCmdline( int argc, char** argv ) {
             std::string sw, arg;
@@ -192,6 +190,8 @@ namespace uwc {
                 if ( sw.empty() ) {
                     if ( arg == "-simple" )
                         simple_ = true;
+                    else if ( arg == "-quiet" )
+                        verbose_ = false;
                     else if ( arg == "-inbuf" || arg == "-agg" )
                         sw = arg;
                     else if ( !inPath )
@@ -246,8 +246,10 @@ namespace uwc {
                 return 1;
             }
             auto startTime = std::chrono::steady_clock::now();
-            std::cout << "================================================\n";
-            std::cout << "Processing file (-simple) " << in_.string() << "..." << std::endl;
+            if ( verbose_ ) {
+                std::cout << "================================================\n";
+                std::cout << "Processing file (-simple) " << in_.string() << "..." << std::endl;
+            }
             Words words;
             std::size_t total = 0;
 
@@ -284,14 +286,19 @@ namespace uwc {
                     }
                 }
             }
-            auto stopTime = std::chrono::steady_clock::now();
-            std::chrono::duration< float > sec = stopTime - startTime;
-            if ( sec.count() < 1 ) {
-                auto dur = std::chrono::duration_cast< std::chrono::milliseconds >( stopTime - startTime );
-                std::cout << "!!! Done in " << dur.count() << " milliseconds.\n";
-            } else
-                std::cout << "!!! Done in " << sec.count() << " seconds.\n";
-            std::cout << "File " << in_.string() << " contains " << words.size() << " unique words, total " << total << "\n";
+            if ( verbose_ ) {
+                auto stopTime = std::chrono::steady_clock::now();
+                std::chrono::duration< float > sec = stopTime - startTime;
+                if ( sec.count() < 1 ) {
+                    auto dur = std::chrono::duration_cast< std::chrono::milliseconds >( stopTime - startTime );
+
+                    std::cout << "!!! Done in " << dur.count() << " milliseconds.\n";
+                } else
+                    std::cout << "!!! Done in " << sec.count() << " seconds.\n";
+                std::cout << "File " << in_.string() << " contains " << words.size() << " unique words, total " << total << "\n";
+            } else {
+                std::cout << words.size() << "\n";
+            }
             /// for ( auto const& w : words )
             ///     std::cout << "'" << w << "'\n";
             return 0;
@@ -306,8 +313,10 @@ namespace uwc {
                 return 1;
             }
             auto startTime = std::chrono::steady_clock::now();
-            std::cout << "================================================\n";
-            std::cout << "Processing file " << in_.string() << "..." << std::endl;
+            if ( verbose_ ) {
+                std::cout << "================================================\n";
+                std::cout << "Processing file " << in_.string() << "..." << std::endl;
+            }
 
             Words finalSet;
             std::vector< std::unique_ptr< Worker > > workers;
@@ -414,18 +423,19 @@ namespace uwc {
                 finalSet.merge( workers[ 0 ]->useWords() );
             }
             workers.clear(); // stop and join worker threads
-            auto stopTime = std::chrono::steady_clock::now();
 
-            if ( finalSet.contains( "" ) )
-                log( "fff EMPTY WORD!!!!" );
-
-            std::chrono::duration< float > sec = stopTime - startTime;
-            if ( sec.count() < 1 ) {
-                auto dur = std::chrono::duration_cast< std::chrono::milliseconds >( stopTime - startTime );
-                std::cout << "!!! Done in " << dur.count() << " milliseconds.\n";
-            } else
-                std::cout << "!!! Done in " << sec.count() << " seconds.\n";
-            std::cout << "File " << in_.string() << " contains " << finalSet.size() << " unique words, total ???\n";
+            if ( verbose_ ) {
+                auto stopTime = std::chrono::steady_clock::now();
+                std::chrono::duration< float > sec = stopTime - startTime;
+                if ( sec.count() < 1 ) {
+                    auto dur = std::chrono::duration_cast< std::chrono::milliseconds >( stopTime - startTime );
+                    std::cout << "!!! Done in " << dur.count() << " milliseconds.\n";
+                } else
+                    std::cout << "!!! Done in " << sec.count() << " seconds.\n";
+                std::cout << "File " << in_.string() << " contains " << finalSet.size() << " unique words, total ???\n";
+            } else {
+                std::cout << finalSet.size() << "\n";
+            }
             return 0;
         }
 
