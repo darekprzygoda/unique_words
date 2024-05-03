@@ -12,7 +12,6 @@ env:
   # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
   BUILD_TYPE: Release
   Catch2_VERSION: v3.5.4
-  CATCH2_DIR: /usr/lib/TODO
 
 jobs:
   build:

@@ -14,24 +14,11 @@ add_compile_options(
 #set( BOOST_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/boost-${BOOST_VERSION}/include CACHE INTERNAL "Boost include directory" FORCE )
 #include_directories( SYSTEM ${BOOST_INCLUDE_DIR} )
 
-if ("$ENV{CATCH2_DIR}" STREQUAL "")
-    set( CATCH2_DIR "${CMAKE_SOURCE_DIR}/../../Catch2/deploy" )
+if (NOT "${CATCH2_DIR}" STREQUAL "")
+    # message( WARNING "dur: ${CATCH2_DIR}" )
+    include_directories( "${CATCH2_DIR}/include" )
+    link_directories( "${CATCH2_DIR}/lib" )
 endif()
-
-include_directories( SYSTEM "${CATCH2_DIR}/include" )
-link_directories( "${CATCH2_DIR}/lib" )
-
-# add_library(Catch2 STATIC IMPORTED)
-# set_target_properties( Catch2 PROPERTIES
-#   IMPORTED_LOCATION "${CATCH2_DIR}/lib/libCatch2.a"
-#   INTERFACE_INCLUDE_DIRECTORIES "${CATCH2_DIR}/include"
-# )
-# add_library(Catch2Main STATIC IMPORTED)
-#
-# set_target_properties( Catch2Main PROPERTIES
-#   IMPORTED_LOCATION "${CATCH2_DIR}/lib/libCatch2Main.a"
-#   INTERFACE_INCLUDE_DIRECTORIES "${CATCH2_DIR}/include"
-# )
 
 add_library( util STATIC util.cpp )
 
