@@ -1,0 +1,8 @@
+# build directories
+build
+
+# QtCreator CMake settings
+CMakeLists.txt.user
+CMakeLists.txt.user.*
+
+*.log
