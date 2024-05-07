@@ -337,7 +337,7 @@ namespace uwc {
                 else if ( agg_ == DelayedSingle )
                     std::cout << "Aggregate in single thread after processing all data" << std::endl;
                 else // if ( agg_ == DelayedMulti )
-                    std::cout << "Aggregate in single multiple threads after processing all data" << std::endl;
+                    std::cout << "Aggregate in multiple threads after processing all data" << std::endl;
             }
 
             Words finalSet;
