@@ -1,7 +1,11 @@
 #!/bin/bash
 # set -x
 
+# binaries build by clang-10
 dir="build_old/release"
+
+# binaries build by clang-14
+dir="build/release"
 
 repeats=(5 50 95)
 sizes=(1M 10M 100M)
@@ -21,11 +25,11 @@ for r in "${!repeats[@]}"; do
     done
 done
 
-
-$dir/uwc test/r20-1G.txt -simple
-$dir/uwc test/r20-1G.txt -agg single
-$dir/uwc test/r20-1G.txt -agg multi
-$dir/uwc test/r20-1G.txt -agg delayed-single
-$dir/uwc test/r20-1G.txt -agg delayed-multi
+# $dir/gen -repeat=20 test/r20-1G.txt 1G
+# $dir/uwc test/r20-1G.txt -simple
+# $dir/uwc test/r20-1G.txt -agg single
+# $dir/uwc test/r20-1G.txt -agg multi
+# $dir/uwc test/r20-1G.txt -agg delayed-single
+# $dir/uwc test/r20-1G.txt -agg delayed-multi
 
 
