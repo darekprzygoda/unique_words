@@ -5,7 +5,7 @@
 dir="build_old/release"
 
 # binaries build by clang-14
-dir="build/release"
+# dir="build/release"
 
 repeats=(5 50 95)
 sizes=(1M 10M 100M)
