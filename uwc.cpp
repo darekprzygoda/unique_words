@@ -1,4 +1,5 @@
 #include "util.hpp"
+#include <atomic>
 #include <condition_variable>
 #include <cstdio>
 #include <cstring>
@@ -48,8 +49,8 @@ namespace uwc {
         [[nodiscard]] size_t operator()( std::string_view txt ) const { return std::hash< std::string_view >{}( txt ); }
         [[nodiscard]] size_t operator()( const std::string& txt ) const { return std::hash< std::string >{}( txt ); }
     };
-
     using Words = std::unordered_set< std::string, string_hash, std::equal_to<> >;
+
     const auto npos = std::string_view::npos;
 
     class Worker {
@@ -57,9 +58,17 @@ namespace uwc {
         explicit Worker( int id, Words const& final, std::atomic< unsigned >& done )
             : id_( id ), done_( done ), finalWords_( final ), thread_( &Worker::process, this ) {}
         ~Worker() {
-            std::unique_lock lock( m_ );
-            state_ = Exit;
-            cv_.notify_one();
+            // log( "~worker()", id_ );
+            stop();
+        }
+        void stop() {
+            {
+                std::unique_lock lock( m_ );
+                state_ = Exit;
+                cv_.notify_one();
+            }
+            thread_.join();
+            log( id_, ": Worker stopped." );
         }
 
         void run( std::string_view input, bool clear ) {
@@ -90,21 +99,24 @@ namespace uwc {
             state_ = Go;
             cv_.notify_one();
         }
+        int id() const { return id_; }
 
       private:
+        bool goOrExit() const { return state_ == Go || state_ == Exit; }
         void process() {
-            /// log( id_, ": Worker wait for data" );
+            log( id_, ": Worker wait for data" );
             { // wait for data
                 std::unique_lock lock( m_ );
-                cv_.wait( lock, [ this ] { return state_ == Go || state_ == Exit; } );
+                while ( !goOrExit() )
+                    cv_.wait( lock );
                 if ( state_ == Exit ) {
-                    /// log( id_, ": Worker exit" );
+                    log( id_, ": Worker process() exit" );
                     return;
                 }
             }
             while ( true ) {
                 if ( mergeWith_ ) {
-                    /// log( id_, ": Merge ", mergeWith_->id_, " into ", id_ );
+                    log( id_, ": Merge ", mergeWith_->id_, " into ", id_ );
                     words_.merge( mergeWith_->words_ );
                 } else {
                     /// log( id_, ": Worker processing data..." );
@@ -119,37 +131,37 @@ namespace uwc {
                             // no delimiter -> last word
                             /// log( id_, ": got word '", word, "'" );
                             if ( !data_.empty() ) {
-                                if ( !finalWords_.contains( data_ ) )
+                                if ( !finalWords_.contains( std::string( data_ ) ) )
                                     words_.emplace( data_ );
                             }
                             break;
                         }
                         std::string_view word( data_.data(), idx );
                         if ( !word.empty() ) {
-                            /// log( id_, ": got word '", word, "'" );
-                            if ( !finalWords_.contains( word ) )
+                            // log( id_, ": got word '", word, "'" );
+                            if ( !finalWords_.contains( std::string( word ) ) )
                                 words_.emplace( word ); // put word into set
                         }
                         data_.remove_prefix( idx + 1 ); // remove word and delimiter from input
                     }
                     /// log( id_, ": Worker data processed" );
                 }
-                /*int d = */ done_.fetch_add( 1, std::memory_order_release );
+
+                /*unsigned d = */ done_.fetch_add( 1, std::memory_order_release );
                 /// log( id_, ": ", words_.size(), " unique words, doneCounter: ", d + 1 );
                 std::unique_lock lock( m_ );
                 state_ = Done;
-                cv_.notify_one();
                 // wait for next chunk or exit
-                cv_.wait( lock, [ this ] { return state_ == Go || state_ == Exit; } );
-                /// log( id_, ": Worker wait finished, state: ", state_ );
+                while ( !goOrExit() )
+                    cv_.wait( lock );
                 if ( state_ == Exit ) {
-                    /// log( id_, ": Worker exit" );
+                    log( id_, ": Worker process() exit" );
                     return;
                 }
             }
         }
 
-        int id_; // used in logging only
+        [[maybe_unused]] int id_; // used in logging only
         std::atomic< unsigned >& done_;
         Words const& finalWords_;
 
@@ -158,7 +170,7 @@ namespace uwc {
 
         std::string_view data_;
         Words words_;
-        std::jthread thread_;
+        std::thread thread_;
         mutable std::mutex m_;
         mutable std::condition_variable cv_;
 
@@ -175,12 +187,12 @@ namespace uwc {
         bool verbose_ = true;
 
         enum AggregateMode { SingleThread, MultiThread, DelayedSingle, DelayedMulti };
-        AggregateMode agg_ = SingleThread;
+        AggregateMode agg_ = DelayedSingle;
 
       public:
         App() {}
 
-        void usage() { std::cout << "Usage: uwc [-quiet] [-inbuf <read_buffer_size] <input_path>\n"; }
+        void usage() { std::cout << "Usage: uwc [-quiet] [-agg single|multi|delayed-single|delayed-multi] [-inbuf <read_buffer_size] <input_path>\n"; }
 
         bool processCmdline( int argc, char** argv ) {
             std::string sw, arg;
@@ -218,13 +230,14 @@ namespace uwc {
                         if ( arg == "single" )
                             agg_ = SingleThread;
                         else if ( arg == "multi" )
-                            agg_ = SingleThread;
+                            agg_ = MultiThread;
                         else if ( arg == "delayed-single" )
                             agg_ = DelayedSingle;
                         else if ( arg == "delayed-multi" )
                             agg_ = DelayedMulti;
                         else {
-                            std::cerr << "Bad value of -agg switch '" << arg << "', should be single, multi or delayed\n";
+                            std::cerr << "Bad value of -agg switch '" << arg
+                                      << "', should be single, multi, delayed-single or delayed-multi\n";
                             return false;
                         }
                     }
@@ -305,7 +318,8 @@ namespace uwc {
         }
 
         int countUniqueWords() {
-            const unsigned cpuCores = std::thread::hardware_concurrency();
+            const unsigned cpuCores = std::thread::hardware_concurrency() + 1;
+            log( "Cores: ", cpuCores );
 
             std::ifstream input( in_, std::ios::binary );
             if ( !input ) {
@@ -316,6 +330,14 @@ namespace uwc {
             if ( verbose_ ) {
                 std::cout << "================================================\n";
                 std::cout << "Processing file " << in_.string() << "..." << std::endl;
+                if ( agg_ == SingleThread )
+                    std::cout << "Aggregate in single thread" << std::endl;
+                else if ( agg_ == MultiThread )
+                    std::cout << "Aggregate in multiple threads" << std::endl;
+                else if ( agg_ == DelayedSingle )
+                    std::cout << "Aggregate in single thread after processing all data" << std::endl;
+                else // if ( agg_ == DelayedMulti )
+                    std::cout << "Aggregate in single multiple threads after processing all data" << std::endl;
             }
 
             Words finalSet;
@@ -323,7 +345,7 @@ namespace uwc {
             std::vector< Worker* > toMerge;
             toMerge.reserve( cpuCores );
 
-            std::atomic< unsigned > doneCounter;
+            std::atomic< unsigned > doneCounter{};
             for ( std::size_t i = 0; i < cpuCores; ++i )
                 workers.emplace_back( new Worker( i, finalSet, doneCounter ) );
 
@@ -331,10 +353,10 @@ namespace uwc {
             bool allDone = false;
             std::size_t keep = 0;
             [[maybe_unused]] std::size_t round = 0;
-            /// log( "Read buffer size: ", buf.size() );
+            log( "Read buffer size: ", buf.size() );
 
             while ( !allDone ) {
-                /// log( "Read input (round ", round, ")..." );
+                log( "Read input (round ", round, ")..." );
                 input.read( buf.storageStart(), buf.storageSize() );
                 buf.addValid( input.gcount() );
                 // log( input.gcount(), " bytes read, ", buf.valid(), " bytes available" );
@@ -352,8 +374,8 @@ namespace uwc {
                     data.remove_suffix( keep );
                 }
                 auto chunks = util::splitToChunks( data, cpuCores );
-                /// for ( auto c : chunks )
-                ///     log( "C:", c, "|" );
+                //// for ( auto c : chunks )
+                ////     log( "CHUNK|", c, "|" );
 
                 // run workers
                 doneCounter = 0;
@@ -364,17 +386,18 @@ namespace uwc {
                     toMerge.push_back( workers[ i ].get() );
                 }
 
-                /// log( "wait for workers" );
+                log( "wait for workers ", usedWorkers );
                 // wait for workers to finish
                 while ( doneCounter.load( std::memory_order_acquire ) < usedWorkers )
                     std::this_thread::sleep_for( std::chrono::milliseconds( 1 ) );
 
-                /// log( "aggregate results" );
                 if ( agg_ == SingleThread ) {
+                    log( "aggregate results in single thread" );
                     for ( std::size_t i = 0; i < usedWorkers; ++i )
                         finalSet.merge( workers[ i ]->useWords() );
                 } else if ( agg_ == MultiThread ) {
                     // pairwise in multiple threads
+                    log( "aggregate results in multiple threads" );
                     while ( toMerge.size() > 1 ) {
                         auto first = toMerge.begin();
                         auto last = --toMerge.end();
@@ -387,23 +410,36 @@ namespace uwc {
                             ++expected;
                         }
                         // wait for workers to finish
+                        log( "wait for ", expected, " workers" );
                         while ( doneCounter.load( std::memory_order_acquire ) < expected )
-                            std::this_thread::sleep_for( std::chrono::microseconds( 5 ) );
+                            std::this_thread::sleep_for( std::chrono::milliseconds( 1 ) );
                         toMerge.erase( std::prev( toMerge.end(), expected ), toMerge.end() );
                     }
                     finalSet.merge( workers[ 0 ]->useWords() );
                 }
                 buf.reset( keep );
-                /// log( "'", buf.view(), "' kept to process in next round" );
+                log( "'", buf.view(), "' kept to process in next round" );
                 ++round;
             }
             if ( agg_ == DelayedSingle ) {
-                for ( std::size_t i = 0; i < workers.size(); ++i )
-                    finalSet.merge( workers[ i ]->useWords() );
+                log( "Delayed Merge start" );
+                if ( workers.size() > 0 ) {
+                    finalSet = std::move( workers[ 0 ]->useWords() );
+                    for ( std::size_t i = 1; i < workers.size(); ++i ) {
+                        log( "Merge ", workers[ i ]->id(), "into final set" );
+                        finalSet.merge( workers[ i ]->useWords() );
+                    }
+                }
+                log( "Delayed Merge done" );
             } else if ( agg_ == DelayedMulti ) {
                 // pairwise in multiple threads
-                for ( auto& w : workers )
-                    toMerge.push_back( w.get() );
+                log( "Delayed Merge start" );
+                toMerge.clear();
+                if ( workers.size() > 0 ) {
+                    finalSet = std::move( workers[ 0 ]->useWords() );
+                    for ( std::size_t i = 1; i < workers.size(); ++i )
+                        toMerge.push_back( workers[ i ].get() );
+                }
                 while ( toMerge.size() > 1 ) {
                     auto first = toMerge.begin();
                     auto last = --toMerge.end();
@@ -417,11 +453,13 @@ namespace uwc {
                     }
                     // wait for workers to finish
                     while ( doneCounter.load( std::memory_order_acquire ) < expected )
-                        std::this_thread::sleep_for( std::chrono::microseconds( 5 ) );
+                        std::this_thread::sleep_for( std::chrono::milliseconds( 1 ) );
                     toMerge.erase( std::prev( toMerge.end(), expected ), toMerge.end() );
                 }
-                finalSet.merge( workers[ 0 ]->useWords() );
+                log( "Merge ", toMerge[ 0 ]->id(), " into final set" );
+                finalSet.merge( toMerge[ 0 ]->useWords() );
             }
+
             workers.clear(); // stop and join worker threads
 
             if ( verbose_ ) {

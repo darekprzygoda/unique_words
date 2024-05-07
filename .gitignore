@@ -1,5 +1,7 @@
 # build directories
 build
+build_old
+Catch2
 
 # QtCreator CMake settings
 CMakeLists.txt.user

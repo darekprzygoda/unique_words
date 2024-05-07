@@ -1,20 +1,31 @@
 #!/bin/bash
-#set -x
+# set -x
 
-#exec="build/debug/uwc"
-exec="build/release/uwc"
+dir="build_old/release"
 
-files="t1.txt ala.txt r25.txt"
-# files="r20-100M.txt"
-for p in $files
-do
-    $exec test/$p -simple
-    $exec test/$p
+repeats=(5 50 95)
+sizes=(1M 10M 100M)
+for r in "${!repeats[@]}"; do
+    for s in "${!sizes[@]}"; do
+        rep=${repeats[r]}
+        siz=${sizes[s]}
+        name="r${rep}-${siz}.txt"
+        echo "-------------------------------------------------------------"
+        $dir/gen -repeat=$rep test/$name $siz
 
-    $exec test/$p -simple -inbuf 16M
-    $exec test/$p -inbuf 16M
-
+        $dir/uwc test/$name -simple
+        $dir/uwc test/$name -agg single
+        $dir/uwc test/$name -agg multi
+        $dir/uwc test/$name -agg delayed-single
+        $dir/uwc test/$name -agg delayed-multi
+    done
 done
 
+
+$dir/uwc test/r20-1G.txt -simple
+$dir/uwc test/r20-1G.txt -agg single
+$dir/uwc test/r20-1G.txt -agg multi
+$dir/uwc test/r20-1G.txt -agg delayed-single
+$dir/uwc test/r20-1G.txt -agg delayed-multi
 
 

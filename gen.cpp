@@ -11,13 +11,6 @@
 namespace gen {
 
     namespace {
-        struct file_closer {
-            using pointer = FILE*;
-            void operator()( FILE* f ) { std::fclose( f ); }
-        };
-
-        using FileHolder = std::unique_ptr< FILE*, file_closer >;
-
         std::seed_seq uniqueSeedSequence() {
             std::size_t time_seed = static_cast< size_t >( std::time( nullptr ) );
             std::size_t clock_seed = static_cast< size_t >( std::clock() );
@@ -115,18 +108,15 @@ namespace gen {
         }
 
         int generate() {
-            auto f = std::fopen( out_.c_str(), "wb" );
-            if ( !f ) {
+            std::ofstream of( out_, std::ios::trunc );
+            if ( !of ) {
                 std::cerr << "Error: Cannot open output file: " << out_ << "." << std::endl;
                 return 1;
             }
 
             std::cout << "Generating file (requested size=" << size_ << ", repeat=" << repeat_ << "%): " //
                       << out_ << "..." << std::endl;
-            FileHolder fh( f );
-
             const std::size_t wbs = 16 * util::kMB; // write buffer size
-            // const std::size_t wbs = 512; // write buffer size
 
             std::string buffer, word;
             std::deque< std::string > usedWords;
@@ -162,13 +152,13 @@ namespace gen {
                     buffer += " ";
 
                 if ( buffer.size() > size_ || buffer.size() > wbs ) {
-                    std::fwrite( buffer.c_str(), 1, buffer.size(), fh.get() );
+                    of.write( buffer.c_str(), buffer.size() );
                     len += buffer.size();
                     buffer.clear();
                 }
             }
             if ( !buffer.empty() )
-                std::fwrite( buffer.c_str(), 1, buffer.size(), fh.get() );
+                of.write( buffer.c_str(), buffer.size() );
 
             std::cout << "File " << out_ << " contains " << words << " words (" << unique.size() << " unique)" << std::endl;
             return 0;
