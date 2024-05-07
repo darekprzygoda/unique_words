@@ -10,11 +10,14 @@ The solution must utilize all available CPU resources.
 
 __How-to__
 
-Run prepare-ubuntu20.04.sh to build and run docker image based on Ubuntu 20.04 LTS with clang 10
-or prepare-ubuntu20.04.sh to build and run docker image based on Ubuntu 22.04 LTS with clang 14
+Run 
+* prepare-ubuntu20.04.sh to build and run docker image based on Ubuntu 20.04 LTS with clang 10
+  
+or 
+* prepare-ubuntu20.04.sh to build and run docker image based on Ubuntu 22.04 LTS with clang 14
 
 Run ./build.sh inside docker to build excecutalbles
 
-In ./tests.sh update value of dir according to used compiler
+In ./tests.sh update value of `dir` variable according to selected compiler.
 Run ./test.sh to generate test inputs and run tests.
 
